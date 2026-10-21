@@ -1,0 +1,32 @@
+# Site check: after every upload and every 6 hours, checks that fantasycenterhq.com serves the build
+# that's in the repository, over HTTPS, with no secret keys, a reachable account service and fresh
+# auto-update data. A failed run shows a red X in the Actions tab and GitHub emails you.
+# Put this file at .github/workflows/site-check.yml and tools/site_check.js in the repository.
+name: Site check
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 */6 * * *'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: site-check
+  cancel-in-progress: true
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Files in the repository
+        run: node tools/site_check.js files .
+      - name: Wait for GitHub Pages to publish
+        if: github.event_name == 'push'
+        run: sleep 120
+      - name: Live site
+        run: node tools/site_check.js live https://fantasycenterhq.com .
