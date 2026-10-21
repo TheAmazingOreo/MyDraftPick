@@ -52,7 +52,7 @@ jobs:
         env:
           # Your Sleeper league ID: rosters are refreshed here, and its members' other leagues
           # are where the real-trade sample starts.
-          SLEEPER_LEAGUE_ID: ''
+          SLEEPER_LEAGUE_ID: '1383361349068812288'
           # Extra starting points for the real-trade sample (public Sleeper usernames, comma-separated)
           TRADE_SEED_USERS: 'jjzachariason,LateRoundQB'
           TRADE_CALL_BUDGET: '900'
