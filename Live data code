@@ -1,0 +1,83 @@
+name: Live data
+
+# Keeps the app's data fresh: every 10 minutes GitHub runs update-data.js, which pulls
+# Sleeper / FantasyCalc / nflverse and real accepted trades from Sleeper redraft leagues, checks
+# the result, and saves it to a separate "data"
+# branch (one file, history not kept, so the repository never grows). The app reads it
+# automatically. A run that fails its checks leaves the last good copy in place.
+on:
+  schedule:
+    - cron: '*/10 * * * *'   # GitHub may start scheduled runs a few minutes late
+  workflow_dispatch:      # Actions tab -> Live data -> Run workflow
+
+permissions:
+  contents: write
+
+concurrency:              # never two runs at once; a queued run waits instead of overlapping
+  group: live-data
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Get the published copy
+        id: prev
+        run: |
+          if git fetch origin data --depth=1 2>/dev/null; then
+            git show origin/data:live.json > prev.json 2>/dev/null || echo '{}' > prev.json
+            echo "sha=$(git rev-parse origin/data)" >> "$GITHUB_OUTPUT"
+          else
+            echo '{}' > prev.json
+            echo "sha=" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Real-trade crawl bookkeeping (league/user ids): kept in the private Actions cache, never published
+      - name: Restore trade crawl state
+        uses: actions/cache/restore@v4
+        with:
+          path: crawl.json
+          key: trade-crawl-${{ github.run_id }}
+          restore-keys: trade-crawl-
+
+      - name: Fetch and check live data
+        run: node update-data.js prev.json live.json crawl.json
+        env:
+          # Your Sleeper league ID: rosters are refreshed here, and its members' other leagues
+          # are where the real-trade sample starts.
+          SLEEPER_LEAGUE_ID: ''
+          # Extra starting points for the real-trade sample (public Sleeper usernames, comma-separated)
+          TRADE_SEED_USERS: 'jjzachariason,LateRoundQB'
+          TRADE_CALL_BUDGET: '900'
+          LEAGUE_SIZE: '10'
+          LEAGUE_PPR: '1'       # 1 = full PPR, 0.5 = half, 0 = standard (for trade values)
+          LEAGUE_SUPERFLEX: '0'
+
+      - name: Save trade crawl state
+        if: always() && hashFiles('crawl.json') != ''
+        uses: actions/cache/save@v4
+        with:
+          path: crawl.json
+          key: trade-crawl-${{ github.run_id }}
+
+      - name: Publish to the data branch (only if the checks passed)
+        if: hashFiles('publish.flag') != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREV_SHA: ${{ steps.prev.outputs.sha }}
+        run: |
+          mkdir publish && cp live.json publish/
+          cd publish
+          git init -q -b data
+          git add live.json
+          git -c user.name="live-data-bot" -c user.email="live-data-bot@users.noreply.github.com" commit -q -m "Live data $(date -u +%Y-%m-%dT%H:%MZ)"
+          # Replace the single-commit data branch, but only if nobody published since we read it
+          if [ -n "$PREV_SHA" ]; then LEASE="--force-with-lease=data:$PREV_SHA"; else LEASE="--force-with-lease=data:"; fi
+          git push -q $LEASE "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" data
