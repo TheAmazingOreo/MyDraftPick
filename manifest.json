@@ -1,0 +1,19 @@
+{
+  "name": "2026 Fantasy Command Center",
+  "short_name": "Fantasy",
+  "description": "Draft room, waiver wire and trade analyzer for a 10-team full-PPR league.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0b0d12",
+  "theme_color": "#0b0d12",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
